@@ -42,7 +42,7 @@ This file is necessary for the tool to correctly interpret and display the input
 The format of the file should be as follows:
 
 ```csv
-Feature1    , Feature2                , Feature3    , ...
+Feature1      , Feature2                  , Feature3      , ...
 "[min1, max1]", "[value1, value2, value3]", "[min3, max3]", ...
 ```
 
@@ -112,23 +112,6 @@ Feature3, 0.2
 - The color alpha of each connection represents the weight of the connection. 
 - The size of the input neurons represents their importance (if available).
 
-### Interaction
-Click on input boxes to enter values.
-Use the dropdown menu for categorical features.
-The visualization updates automatically based on the input values.
-Example
-Load a Model:
-
-<image of loading model>
-Input Data:
-
-<image of input data>
-Visualize the Network:
-
-<image of network visualization>
-Feature Importance:
-
-<image of feature importance>
 
 ## Troubleshooting
 - Ensure that the model file is in the correct format (`.keras`).
