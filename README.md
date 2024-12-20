@@ -8,13 +8,15 @@ This tool allows you to visualize the inner workings of a neural network model. 
 - Cluster neurons for better visualization performance.
 - Display feature importance (if feature importance file is available).
 
+<br>
+
 ## Requirements
 ### Python 3.11.x - 3.12.x
 
 Python can be downloaded from the official website: [python.org](https://www.python.org/downloads/)
 
 
-## Installation
+### Installation
 1. Clone the repository:
 
 ```bash	
@@ -30,11 +32,9 @@ cd <repository_directory>
 pip install -r requirements.txt
 ```
 
+<br>
 
-
-# Mapping Values and Feature Importance
-
-### __Mapping Values__
+## __Mapping Values__
 The `MappingValues.csv` file should contain the mapping of feature names to their possible values or ranges.
 
 This file is necessary for the tool to correctly interpret and display the input data.
@@ -46,16 +46,19 @@ Feature1      , Feature2                  , Feature3      , ...
 "[min1, max1]", "[value1, value2, value3]", "[min3, max3]", ...
 ```
 
-#### For numerical features:
+### For numerical features:
 - Use the format `"[min, max]"` to specify the range of possible values.
 
-#### For categorical features:
-- Use the format `"[value1, value2, value3]"` to specify the possible values (they will be interpreted from left to right in the range [0, 1]). Here, `value1` will be mapped to 0, `value2` to 0.5, and `value3` to 1.
+### For categorical features:
+- Use the format `"[value1, value2, value3]"` to specify the possible values (they will be interpreted from left to right in the range [0, 1]).
+
+    Here, `value1` will be mapped to 0, `value2` to 0.5, and `value3` to 1.
 
 __Make Sure to use the correct feature names and values in the mapping file.__
 
+<br>
 
-### __Feature Importance__ (Optional)
+## __Feature Importance__ (Optional)
 The feature importance file should contain the importance values for each feature in the model.
 
 It's only used to adjust the size of the input neurons in the visualization.
@@ -69,6 +72,8 @@ Feature2, 0.3
 Feature3, 0.2
 ...
 ```
+
+<br>
 
 ## How to Use
 
@@ -88,6 +93,8 @@ Feature3, 0.2
 - Neurons are color-coded based on their activation values.
 - Connections are color-coded based on the weights.
 <image of network visualization>
+
+<br>
 
 ## Detailed Explanation
 ### Colors and Layout
@@ -112,6 +119,7 @@ Feature3, 0.2
 - The color alpha of each connection represents the weight of the connection. 
 - The size of the input neurons represents their importance (if available).
 
+<br>
 
 ## Troubleshooting
 - Ensure that the model file is in the correct format (`.keras`).
