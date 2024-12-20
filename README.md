@@ -1,43 +1,54 @@
 # Neural Network Visualization Tool
-This tool allows you to visualize the inner workings of a neural network model. You can load a pre-trained model, input data, and see how the data propagates through the network layers. The tool also provides a graphical interface to interact with the model and visualize the neurons and their connections.
+
+<div align="center">
+    <img src="Images/DNN visual with values.png" alt="Neural Network Visualization Tool Logo" width="100%"/>
+</div>
+
+This tool allows you to visualize the inner workings of a neural network model. You can load a pre-trained model, input data, and see how the data propagates through the network layers. The tool provides a graphical interface to input data, visualize neuron activations, and connections.
 
 ## Features
+
 - Load and visualize pre-trained neural network models.
 - Input data through a graphical interface.
 - Visualize neuron activations and connections.
 - Cluster neurons for better visualization performance.
 - Display feature importance (if feature importance file is available).
 
-<br>
-
 ## Requirements
+
 ### Python 3.11.x - 3.12.x
 
 Python can be downloaded from the official website: [python.org](https://www.python.org/downloads/)
 
+## Installation
 
-### Installation
 1. Clone the repository:
 
-```bash	
-git clone <repository_url>
-cd <repository_directory>
-```
+    ```bash
+    git clone <repository_url>
+    cd <repository_directory>
+    ```
 
 2. Create a Python virtual environment using the installed Python version (recommended):
 
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    ```
+
 3. Install the required packages:
 
-```bash
-pip install -r requirements.txt
-```
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 <br>
 
-## __Mapping Values__
-The `MappingValues.csv` file should contain the mapping of feature names to their possible values or ranges.
+# How to Use
 
-This file is necessary for the tool to correctly interpret and display the input data.
+## Mapping Values
+
+Create a `MappingValues.csv` file in the same directory as the model file. The `MappingValues.csv` file should contain the mapping of feature names to their possible values or ranges. This file is necessary for the tool to correctly interpret the input values for the model.
 
 The format of the file should be as follows:
 
@@ -46,22 +57,25 @@ Feature1      , Feature2                  , Feature3      , ...
 "[min1, max1]", "[value1, value2, value3]", "[min3, max3]", ...
 ```
 
-### For numerical features:
+### ⚠️ Features should be in the same order as when the model was trained. ⚠️
+
+Example available in `model example\` folder.
+
+### __For numerical features__:
+
 - Use the format `"[min, max]"` to specify the range of possible values.
 
-### For categorical features:
-- Use the format `"[value1, value2, value3]"` to specify the possible values (they will be interpreted from left to right in the range [0, 1]).
+### __For categorical features__:
+
+- Use the format `"[value1, value2, value3]"` to specify the possible values, they will be interpreted from left to right in the range [0, 1].
 
     Here, `value1` will be mapped to 0, `value2` to 0.5, and `value3` to 1.
 
-__Make Sure to use the correct feature names and values in the mapping file.__
-
 <br>
 
-## __Feature Importance__ (Optional)
-The feature importance file should contain the importance values for each feature in the model.
+## Feature Importance (Optional)
 
-It's only used to adjust the size of the input neurons in the visualization.
+The feature importance file should contain the importance values for each feature in the model. It's only used to adjust the size of the input neurons in the visualization.
 
 The format of the file should be as follows:
 
@@ -73,55 +87,44 @@ Feature3, 0.2
 ...
 ```
 
-<br>
-
-## How to Use
-
 1. Select a Model:
     - Click on the "Select Model" button to open a file dialog.
     - Choose the .keras model file to load.
-<image of selecting model>
 
 2. Input Data:
     - Enter values for each feature in the input boxes on the left side of the window.
     - For categorical features, a dropdown menu will appear.
-<image of input data>
 
-
-### Visualization of the Network:
-- The visualization area on the right will display the neurons and their connections.
-- Neurons are color-coded based on their activation values.
-- Connections are color-coded based on the weights.
-<image of network visualization>
-
-<br>
 
 ## Detailed Explanation
+
 ### Colors and Layout
+
 - Colors:
-    - Positive activations: `#5BAFFC` (blue)
-    - Negative activations: `#FD4F59` (red)
+    - Positive activations: <span style="color:#5BAFFC;">#5BAFFC</span> (blue)
+    - Negative activations: <span style="color:#FD4F59;">#FD4F59</span> (red)
 
 - Layout:
     - Input boxes are aligned on the left side.
     - Visualization area is on the right side.
-    - The window is resizable, and the layout adjusts accordingly.
+    - The window is resizable (with a min size), and the layout adjusts accordingly.
 
 ### Clustering
+
 - Neurons are clustered using hierarchical clustering to improve visualization performance.
 - Clustering can be toggled on or off (No clustering can lead to performance issues with large networks).
 - The threshold for clustering can be adjusted.
 
 ### Visualization
+
 - Neurons are displayed as circles.
 - Connections between neurons are displayed as lines.
 - The color of each connection represents the value transmitted.
-- The color alpha of each connection represents the weight of the connection. 
+- The color alpha of each connection represents the weight of the connection.
 - The size of the input neurons represents their importance (if available).
 
-<br>
-
 ## Troubleshooting
+
 - Ensure that the model file is in the correct format (`.keras`).
 - Ensure that the mapping file (`MappingValues.csv`) is available in the same directory as the model file.
 - Check the console for any error messages.

@@ -80,6 +80,7 @@ class NeuralNetApp:
         self.model = None
         self.newModel = False
         self.mapping = None
+        self.displayValues = False
         self.featuresImportance = None
         self.lastInputValues = None
         self.lastInputChangeTime = time.time()
@@ -87,7 +88,7 @@ class NeuralNetApp:
 
         # Margins for visualization
         self.leftMargin = 600
-        self.rightMargin = 150
+        self.rightMargin = 100
         self.topMargin = self.INPUT_BOX_TOP_MARGIN # top margin is the same as the start of the input box so that the input boxes are aligned with the visualization
         self.bottomMargin = self.INPUT_BOX_BOTTOM_MARGIN
         self.visualisationArea = pygame.Rect(
@@ -115,22 +116,6 @@ class NeuralNetApp:
         self.MIN_CONNECTION_WIDTH = 1
         self.MAX_CONNECTION_WIDTH = 10
 
-    def renderDropdown(self, inputBox, options):
-        """
-        Render a dropdown menu for a given input box.
-        """
-        dropdownRect = pygame.Rect(inputBox.x, inputBox.y + self.INPUT_BOX_HEIGHT, self.INPUT_BOX_WIDTH, len(options) * self.INPUT_BOX_HEIGHT)
-        pygame.draw.rect(self.screen, self.DROP_DOWN_BACKGROUND_COLOR, dropdownRect, border_radius=self.borderRadius)
-        mousePos = pygame.mouse.get_pos()
-        for i, option in enumerate(options):
-            optionRect = pygame.Rect(inputBox.x, inputBox.y + self.INPUT_BOX_HEIGHT + i * self.INPUT_BOX_HEIGHT, self.INPUT_BOX_WIDTH, self.INPUT_BOX_HEIGHT)
-            if optionRect.collidepoint(mousePos):
-                pygame.draw.rect(self.screen, self.HOVER_COLOR, optionRect, border_radius=self.borderRadius)
-            else:
-                pygame.draw.rect(self.screen, self.DROP_DOWN_BACKGROUND_COLOR, optionRect, border_radius=self.borderRadius)
-            
-            optionText = self.font.render(option, True, self.TEXT_COLOR)
-            self.screen.blit(optionText, (optionRect.x + 5, optionRect.y + 5))
 
     def isFloat(self, value):
         """Check if the string can be converted to a float."""
@@ -155,7 +140,7 @@ class NeuralNetApp:
         print(f"\nLoading model parameters from {paramsFilePath}...")
         seed = 42
         if not os.path.exists(paramsFilePath):
-            print(f"No .params file found at {paramsFilePath}, using default random seed (42)")
+            print(f"No .params file found at {paramsFilePath}, using default random seed ({seed})")
         else:  
             # load the randomSeed in .params file (json format)
             with open(paramsFilePath, 'r') as file:
@@ -216,7 +201,6 @@ class NeuralNetApp:
         self.inputBoxes = []
         self.inputValues = {}
     
-
     def selectModelFile(self):
         """
         Open a file dialog to select a model file.
@@ -227,6 +211,23 @@ class NeuralNetApp:
         root.destroy()
         return filePath
 
+
+    def renderDropdown(self, inputBox, options):
+        """
+        Render a dropdown menu for a given input box.
+        """
+        dropdownRect = pygame.Rect(inputBox.x, inputBox.y + self.INPUT_BOX_HEIGHT, self.INPUT_BOX_WIDTH, len(options) * self.INPUT_BOX_HEIGHT)
+        pygame.draw.rect(self.screen, self.DROP_DOWN_BACKGROUND_COLOR, dropdownRect, border_radius=self.borderRadius)
+        mousePos = pygame.mouse.get_pos()
+        for i, option in enumerate(options):
+            optionRect = pygame.Rect(inputBox.x, inputBox.y + self.INPUT_BOX_HEIGHT + i * self.INPUT_BOX_HEIGHT, self.INPUT_BOX_WIDTH, self.INPUT_BOX_HEIGHT)
+            if optionRect.collidepoint(mousePos):
+                pygame.draw.rect(self.screen, self.HOVER_COLOR, optionRect, border_radius=self.borderRadius)
+            else:
+                pygame.draw.rect(self.screen, self.DROP_DOWN_BACKGROUND_COLOR, optionRect, border_radius=self.borderRadius)
+            
+            optionText = self.font.render(option, True, self.TEXT_COLOR)
+            self.screen.blit(optionText, (optionRect.x + 5, optionRect.y + 5))
 
     def wrapText(self, text:str, font, maxWidth:int):
         """
@@ -331,6 +332,7 @@ class NeuralNetApp:
             raise ValueError(f"Expected input shape ({expectedInputShape}) does not match provided input shape ({inputData.shape[1]})")
 
         prediction, intermediateOutputs = dnn.predictWithModel(self.model, inputData)
+        self.lastInputValues = self.inputValues.copy()
         return prediction, intermediateOutputs
 
 
@@ -366,10 +368,9 @@ class NeuralNetApp:
             clusters[clusterIndex].append(neuronIndex)
         return clusters
 
-    def visualizeNeurons(self, screen, model, intermediateOutputs):
+    def visualize1D(self, screen, model, intermediateOutputs):
         """
-        Create a visualization of the neural network with neurons displaying their output values,
-        and outgoing connections colored based on the neuron's output value.
+        Visualize model with 1 dimensional input
         """
         timeStart = time.time()
         
@@ -379,13 +380,14 @@ class NeuralNetApp:
         numLayers = len(allOutputs)
         maxNeurons = max([layerOutput.shape[1] for layerOutput in allOutputs])
     
-        padding = 10
-        startWidth = self.leftMargin + padding
-        availableWidth = self.screen.get_width() - self.leftMargin - self.rightMargin - padding*2
+        paddingWH = [30, screen.get_height() * 0.01]
+        startWidth = self.leftMargin + paddingWH[0]
+            
+        availableWidth = self.screen.get_width() - self.leftMargin - self.rightMargin - paddingWH[0]*2
         layerSpacing = availableWidth / (numLayers - 1)
     
         startHeight = self.topMargin + 10
-        availableHeight = self.screen.get_height() - self.topMargin - self.bottomMargin - padding*2
+        availableHeight = self.screen.get_height() - self.topMargin - self.bottomMargin - paddingWH[1]*2
     
         neuronRadius = max(10, int(min(layerSpacing, availableHeight / maxNeurons) / 2))
     
@@ -395,7 +397,7 @@ class NeuralNetApp:
         # Extract weights from the model
         weights = [layer.get_weights()[0] for layer in model.layers if isinstance(layer, tf.keras.layers.Dense)]
         # lineWidth = 3
-    
+
         self.screen.set_clip(self.visualisationArea)
 
         # Get feature importance
@@ -508,12 +510,12 @@ class NeuralNetApp:
                 y = yStart + clusterIndex * neuronSpacing
                 
                 # Adjust neuron radius based on importance for input layer
+                adjustedRadius = neuronRadius
                 if i == 0:
                     feature = list(self.mapping.keys())[cluster[0]]
                     importance = self.featuresImportance.get(feature, 1)
                     adjustedRadius = int(normalizeImportance(importance))
-                else:
-                    adjustedRadius = neuronRadius
+                    
 
                 # Draw black filled circle with white edge
                 pygame.draw.circle(screen, (0, 0, 0), (int(x), int(y)), int(adjustedRadius * blackCircleSize))
@@ -528,21 +530,28 @@ class NeuralNetApp:
                 # Draw inner circle based on neuron value
                 pygame.draw.circle(screen, color, (int(x), int(y)), innerRadius)
 
-                # Render neuron output value
-                # valueText = f"{clusterOutput:.2f}"
-                # textSurface = self.font.render(valueText, True, self.TEXT_COLOR)
-                # textRect = textSurface.get_rect(center=(int(x), int(y)))
-                # screen.blit(textSurface, textRect)
+                if self.displayValues:
+                    # Render neuron output value
+                    valueText = f"{clusterOutput:.2f}"
+                    textSurface = self.font.render(valueText, True, self.TEXT_COLOR)
+                    textRect = textSurface.get_rect(center=(int(x + 5 + adjustedRadius + textSurface.get_width() / 2), int(y)))
+                    screen.blit(textSurface, textRect)
 
-            # Reset clipping area
-            self.screen.set_clip(None)
+        # Reset clipping area
+        self.screen.set_clip(None)
 
-            print(f"Visualization took {time.time() - timeStart:.2f} seconds")
+        print(f"Visualization took {time.time() - timeStart:.2f} seconds")
 
     def clearVisualizationArea(self):
         """
         Clear the visualization area.
         """
+        self.visualisationArea = pygame.Rect(
+            self.leftMargin-10,
+            self.topMargin-10,
+            self.screen.get_width() - self.leftMargin - self.rightMargin + 20,
+            self.screen.get_height() - self.topMargin - self.bottomMargin + 20
+        )
         self.screen.set_clip(self.visualisationArea)
         self.screen.fill(self.BACKGROUND_COLOR)
         self.screen.set_clip(None)
@@ -555,6 +564,7 @@ class NeuralNetApp:
         
         verticalSpacing = (self.screen.get_height() - self.INPUT_BOX_TOP_MARGIN - self.INPUT_BOX_BOTTOM_MARGIN - self.INPUT_BOX_HEIGHT) / len(self.mapping)
         inputBoxStartY = self.INPUT_BOX_TOP_MARGIN + self.INPUT_BOX_HEIGHT
+
         
         if not self.inputBoxes:
             for i, (feature, values) in enumerate(self.mapping.items()):
@@ -570,13 +580,15 @@ class NeuralNetApp:
             for i, (feature, inputBox, values) in enumerate(self.inputBoxes):
                 newY = inputBoxStartY + int(verticalSpacing * i)
                 self.inputBoxes[i] = (feature, pygame.Rect(10, newY, self.INPUT_BOX_WIDTH, self.INPUT_BOX_HEIGHT), values)
-                
 
-    def mainLoop(self, visualisation=True):
+
+    def mainLoop(self, visualisation=True, displayValues=False):
         """
         Main loop for the application.
         """
         self.screen.fill(self.BACKGROUND_COLOR)
+
+        self.displayValues = displayValues
 
         if not self.enableClustering:
             print("\n=============================================")
@@ -671,6 +683,12 @@ class NeuralNetApp:
                                 self.model = dnn.loadModel(self.modelFilePath)
                                 self.loadModelParams()
                                 self.updateInputBoxes()
+                        
+                        if hasattr(self, 'toggleDisplayValuesButton') and self.toggleDisplayValuesButton.collidepoint(event.pos):
+                            self.displayValues = not self.displayValues  # Toggle displayValues
+                            self.lastInputValues = None
+                            self.lastInputChangeTime = time.time() - self.waitTime
+                    
 
                     except Exception as e:
                         print(f"Error selecting model: {e}")
@@ -769,13 +787,16 @@ class NeuralNetApp:
                     labelPos = (inputBox.x + self.INPUT_BOX_WIDTH + self.INPUT_TEXT_HORIZONTAL_SPACING, helpTextMiddleY - self.FONT_SIZE / 2 + 4)
                     self.screen.blit(labelSurface, labelPos)
 
+                    # Update left margin based on label width
+                    self.leftMargin = labelPos[0] + labelSurface.get_width() + 50
+
                 if self.dropdownOpen:
                     for feature, inputBox, values in self.inputBoxes:
                         if self.dropdownOpen == feature:
-                            self.renderDropdown(feature, inputBox, values)
+                            self.renderDropdown(inputBox, values)
 
-                inputData = [float(value) if self.isFloat(value) else np.nan for value in self.inputValues.values()]
-                inputData = np.array([inputData])
+
+                # Start prediction thread if not already running
                 with self.predictionLock:
                     if not self.predictionReady:
                         self.predictionThread = threading.Thread(target=self.getPredictionThread)
@@ -791,7 +812,7 @@ class NeuralNetApp:
                         self.intermediateOutputs = None
 
                         if visualisation:
-                            self.visualizeNeurons(self.screen, self.model, intermediateOutputs)
+                            self.visualize1D(self.screen, self.model, intermediateOutputs)
 
                 if prediction is not None:
                     predictionFont = pygame.font.Font(None, 25)
@@ -840,11 +861,28 @@ class NeuralNetApp:
                         visualisationTextPos = (self.leftMargin, self.topMargin - 5)
                         self.screen.blit(visualisationText, visualisationTextPos)
 
+            # Display the select model button
             self.selectModelButton = pygame.Rect(10, 5, self.INPUT_BOX_WIDTH, self.INPUT_BOX_HEIGHT)
             color = self.HOVER_COLOR if self.selectModelButton.collidepoint(pygame.mouse.get_pos()) else self.TEXT_COLOR
             pygame.draw.rect(self.screen, color, self.selectModelButton, 2, border_radius=self.borderRadius)
             selectModelText = self.font.render("Select Model", True, color)
-            self.screen.blit(selectModelText, (self.selectModelButton.x + 5, self.selectModelButton.y + 5))
+            selectModelTextRect = selectModelText.get_rect(center=self.selectModelButton.center)
+            self.screen.blit(selectModelText, selectModelTextRect)
+
+            # Display the toggle display values button
+            self.toggleDisplayValuesButton = pygame.Rect(self.INPUT_BOX_WIDTH + 20 , 5, self.INPUT_BOX_WIDTH, self.INPUT_BOX_HEIGHT)
+
+            # set color based on displayValues
+            color = self.POSITIVE_COLOR if self.displayValues else self.NEGATIVE_COLOR
+            # set color alpha to 0.2
+            color.a = 50
+            # hoveride the color if the mouse is over the button
+            color = self.interpolateColor(color, self.HOVER_COLOR, 0.5) if self.toggleDisplayValuesButton.collidepoint(pygame.mouse.get_pos()) else color
+            
+            pygame.draw.rect(self.screen, color, self.toggleDisplayValuesButton, 2, border_radius=self.borderRadius)
+            toggleDisplayValuesText = self.font.render("Toggle Values", True, color)
+            toggleDisplayValuesTextRect = toggleDisplayValuesText.get_rect(center=self.toggleDisplayValuesButton.center)
+            self.screen.blit(toggleDisplayValuesText, toggleDisplayValuesTextRect)
 
             pygame.display.flip()
             self.clock.tick(self.fps)
@@ -853,7 +891,7 @@ class NeuralNetApp:
 
 def main():
     neuralNetVis = NeuralNetApp()
-    neuralNetVis.mainLoop()
+    neuralNetVis.mainLoop(displayValues=False)
 
 if __name__ == "__main__":
     main()

@@ -1065,14 +1065,5 @@ def evaluateModelsFromDirectory(rootDir:str, dataset:tuple):
         print(modelEvaluation[1])
         print(f"Matrix Score: {modelMatrixScore}")
 
-if __name__ == '__main__':
-    datasetFilePath = r'GeneratedDataSet\ModelDataSet.csv'
-    modelDir = "Models\\"
-    
-    tableToDrop = ['AverageHoursWorked']
-
-    dataset = loadAndPreprocessData(datasetFilePath, tableToDrop)
-
-    evaluateModelsFromDirectory(modelDir, dataset)
-    
+# if __name__ == '__main__':
     # modelPath = runModelTraining()
