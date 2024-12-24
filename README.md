@@ -133,11 +133,10 @@ Feature3, 0.2
 - The size of the input neurons represents their importance *(if provided)*.
 
 <br>
-<br>
 
 # Troubleshooting
 
 - Ensure that the model file is in the correct `.keras` format.
 - Ensure that the mapping file `MappingValues.csv` is available in the same directory as the model file.
 - Check the console for any error messages.
-- If you still face issues, you can directly contact me at theaypisamfpv@gmail.com.
+- If you are still facing issues, you can directly contact me at theaypisamfpv@gmail.com.
