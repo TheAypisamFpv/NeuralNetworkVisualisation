@@ -71,7 +71,7 @@ __⚠️ Features should be in the same order as when the model was trained. ⚠
 
 
 
-- #### _For numerical features_:
+- #### __For numerical features__:
 
     Use the format `"[min, max]"` to specify the range of possible values.
     
@@ -122,7 +122,7 @@ Feature3, 0.2
 
 - Neurons are clustered using hierarchical clustering to improve visualization performance.
 - Clustering can be toggled on or off *__(no clustering can lead to performance issues with large networks)__*.
-- The threshold for a layser to be clustered can be adjusted *(default is 50 neurons)*.
+- The threshold for a layer to be clustered can be adjusted *(default is 50 neurons)*.
 
 ### Visualization
 
