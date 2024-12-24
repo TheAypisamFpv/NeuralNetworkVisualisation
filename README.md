@@ -44,9 +44,26 @@ Python can be downloaded from the official website: [python.org](https://www.pyt
 
 <br>
 
-# How to Use
+## How to Use
 
-## Mapping Values
+### Select a Model:
+- Click on the "Select Model" button to open a file dialog.
+- Choose the .keras model file to load.
+
+
+### Input Data:
+- Enter values for each feature in the input boxes on the left side of the window.
+- For categorical features, a dropdown menu will appear.
+
+<br>
+
+---
+
+<br>
+
+## Model Preparation
+
+### __Mapping Values__
 
 Create a `MappingValues.csv` file in the same directory as the model file. The `MappingValues.csv` file should contain the mapping of feature names to their possible values or ranges. This file is necessary for the tool to correctly interpret the input values for the model.
 
@@ -57,15 +74,19 @@ Feature1      , Feature2                  , Feature3      , ...
 "[min1, max1]", "[value1, value2, value3]", "[min3, max3]", ...
 ```
 
-### ⚠️ Features should be in the same order as when the model was trained. ⚠️
+__⚠️ Features should be in the same order as when the model was trained. ⚠️__
 
-Example available in `model example\` folder.
+*Example available in `model example\` folder.*
 
-### __For numerical features__:
+
+
+#### For numerical features:
 
 - Use the format `"[min, max]"` to specify the range of possible values.
+    
+    Here, `min` will be mapped to 0, and `max` will be mapped to 1.
 
-### __For categorical features__:
+#### For categorical features:
 
 - Use the format `"[value1, value2, value3]"` to specify the possible values, they will be interpreted from left to right in the range [0, 1].
 
@@ -73,7 +94,9 @@ Example available in `model example\` folder.
 
 <br>
 
-## Feature Importance (Optional)
+---
+
+### __Feature Importance (Optional)__
 
 The feature importance file should contain the importance values for each feature in the model. It's only used to adjust the size of the input neurons in the visualization.
 
@@ -86,15 +109,9 @@ Feature2, 0.3
 Feature3, 0.2
 ...
 ```
+*Order does not matter.*
 
-1. Select a Model:
-    - Click on the "Select Model" button to open a file dialog.
-    - Choose the .keras model file to load.
-
-2. Input Data:
-    - Enter values for each feature in the input boxes on the left side of the window.
-    - For categorical features, a dropdown menu will appear.
-
+<br>
 
 ## Detailed Explanation
 
@@ -123,7 +140,10 @@ Feature3, 0.2
 - The color alpha of each connection represents the weight of the connection.
 - The size of the input neurons represents their importance (if available).
 
-## Troubleshooting
+<br>
+<br>
+
+# Troubleshooting
 
 - Ensure that the model file is in the correct format (`.keras`).
 - Ensure that the mapping file (`MappingValues.csv`) is available in the same directory as the model file.
