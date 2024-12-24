@@ -29,12 +29,7 @@ Python can be downloaded from the official website: [python.org](https://www.pyt
     cd <repository_directory>
     ```
 
-2. Create a Python virtual environment using the installed Python version (recommended):
-
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    ```
+2. Create a Python virtual environment using the installed Python version (recommended).
 
 3. Install the required packages:
 
@@ -57,10 +52,6 @@ Python can be downloaded from the official website: [python.org](https://www.pyt
 
 <br>
 
----
-
-<br>
-
 ## Model Preparation
 
 ### __Mapping Values__
@@ -80,15 +71,16 @@ __⚠️ Features should be in the same order as when the model was trained. ⚠
 
 
 
-#### For numerical features:
+- #### _For numerical features_:
 
-- Use the format `"[min, max]"` to specify the range of possible values.
+    Use the format `"[min, max]"` to specify the range of possible values.
     
     Here, `min` will be mapped to 0, and `max` will be mapped to 1.
 
-#### For categorical features:
 
-- Use the format `"[value1, value2, value3]"` to specify the possible values, they will be interpreted from left to right in the range [0, 1].
+- #### __For categorical features__:
+
+    Use the format `"[value1, value2, value3]"` to specify the possible values, they will be interpreted from left to right in the range [0, 1].
 
     Here, `value1` will be mapped to 0, `value2` to 0.5, and `value3` to 1.
 
@@ -96,7 +88,7 @@ __⚠️ Features should be in the same order as when the model was trained. ⚠
 
 ---
 
-### __Feature Importance (Optional)__
+### __Feature Importance *(Optional)*__
 
 The feature importance file should contain the importance values for each feature in the model. It's only used to adjust the size of the input neurons in the visualization.
 
@@ -124,13 +116,13 @@ Feature3, 0.2
 - Layout:
     - Input boxes are aligned on the left side.
     - Visualization area is on the right side.
-    - The window is resizable (with a min size), and the layout adjusts accordingly.
+    - The window is resizable *(with a min size)*, and the layout adjusts accordingly.
 
 ### Clustering
 
 - Neurons are clustered using hierarchical clustering to improve visualization performance.
-- Clustering can be toggled on or off (No clustering can lead to performance issues with large networks).
-- The threshold for clustering can be adjusted.
+- Clustering can be toggled on or off *__(no clustering can lead to performance issues with large networks)__*.
+- The threshold for a layser to be clustered can be adjusted *(default is 50 neurons)*.
 
 ### Visualization
 
@@ -138,13 +130,14 @@ Feature3, 0.2
 - Connections between neurons are displayed as lines.
 - The color of each connection represents the value transmitted.
 - The color alpha of each connection represents the weight of the connection.
-- The size of the input neurons represents their importance (if available).
+- The size of the input neurons represents their importance *(if provided)*.
 
 <br>
 <br>
 
 # Troubleshooting
 
-- Ensure that the model file is in the correct format (`.keras`).
-- Ensure that the mapping file (`MappingValues.csv`) is available in the same directory as the model file.
+- Ensure that the model file is in the correct `.keras` format.
+- Ensure that the mapping file `MappingValues.csv` is available in the same directory as the model file.
 - Check the console for any error messages.
+- If you still face issues, you can directly contact me at theaypisamfpv@gmail.com.
