@@ -1,6 +1,5 @@
 from sklearn.cluster import AgglomerativeClustering
 from tkinter import Tk, filedialog
-import NeuralNetTorch as dnn
 import pandas as pd
 import numpy as np
 import pyperclip
@@ -168,7 +167,6 @@ class NeuralNetApp:
                 except:
                     print(f"Invalid random seed in {paramsFilePath}, using default seed ({seed})")
         
-        dnn.RANDOM_SEED = seed
         np.random.seed(seed)
         torch.manual_seed(seed)
         if self.device.type == "cuda":
@@ -349,12 +347,25 @@ class NeuralNetApp:
             raise ValueError(f"Expected input shape ({expectedInputShape}) does not match provided input shape ({inputData.shape[1]})")
 
         inputTensor = torch.FloatTensor(inputData).to(self.device)
+        # Setup forward hooks to capture intermediate outputs from hidden layers
+        intermediateOutputsTemp = {}
+        hooks = []
+        for name, module in self.model.named_modules():
+            # Here we capture outputs from all Linear layers. Adjust if needed.
+            if isinstance(module, torch.nn.Linear):
+                h = module.register_forward_hook(lambda mod, inp, out, name=name: intermediateOutputsTemp.update({name: out}))
+                hooks.append(h)
+
         self.model.eval()
         with torch.no_grad():
             output = self.model(inputTensor)
-        
+
+        # Remove hooks after inference
+        for h in hooks:
+            h.remove()
+
         prediction = output.cpu().numpy()
-        intermediateOutputs = None
+        intermediateOutputs = {name: tensor.cpu().numpy() for name, tensor in intermediateOutputsTemp.items()}
         
         self.lastInputValues = self.inputValues.copy()
         return prediction, intermediateOutputs
@@ -704,7 +715,7 @@ class NeuralNetApp:
                             self.modelFilePath = self.selectModelFile()
                             if self.modelFilePath:
                                 self.newModel = True
-                                self.model = dnn.loadModel(self.modelFilePath, dnn.NeuralNetModel, {})
+                                self.model = torch.load(self.modelFilePath)
                                 self.model.to(self.device)
                                 self.loadModelParams()
                                 self.updateInputBoxes()

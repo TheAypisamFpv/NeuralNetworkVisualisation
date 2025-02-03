@@ -131,23 +131,23 @@ def loadAndPreprocessData(filePath:str, specifiedColumnsToDrop:list = [], binary
 
 
 class NeuralNetModel(nn.Module):
-    def __init__(self, layers, input_activation, hidden_activation, outputActivation, dropout_rates):
+    def __init__(self, layers, inputActivation, hiddenActivation, outputActivation, dropoutRates):
         super(NeuralNetModel, self).__init__()
         layerList = []
         # Input layer
         layerList.append(nn.Linear(layers[0], layers[1]))
-        layerList.append(nn.ReLU() if input_activation.lower()=='relu' else nn.Tanh())
+        layerList.append(nn.ReLU() if inputActivation.lower()=='relu' else nn.Tanh())
         layerList.append(nn.BatchNorm1d(layers[1]))
-        layerList.append(nn.Dropout(dropout_rates[0]))
+        layerList.append(nn.Dropout(dropoutRates[0]))
 
         # Hidden layers
         prev = layers[1]
         for i, hidden in enumerate(layers[2:-1]):
             layerList.append(nn.Linear(prev, hidden))
-            layerList.append(nn.ReLU() if hidden_activation.lower()=='relu' else nn.Tanh())
+            layerList.append(nn.ReLU() if hiddenActivation.lower()=='relu' else nn.Tanh())
             layerList.append(nn.BatchNorm1d(hidden))
-            dropoutIdx = min(i+1, len(dropout_rates)-1)
-            layerList.append(nn.Dropout(dropout_rates[dropoutIdx]))
+            dropoutIdx = min(i+1, len(dropoutRates)-1)
+            layerList.append(nn.Dropout(dropoutRates[dropoutIdx]))
             prev = hidden
 
         # Output layer
@@ -374,7 +374,7 @@ def saveModel(model: nn.Module, filePath: str):
 
     # Move model to CPU before saving
     modelCpu = model.cpu()
-    torch.save(modelCpu.state_dict(), filePath)
+    torch.save(modelCpu, filePath)
     print(f"Model saved to '{filePath}'")
     return filePath
 
