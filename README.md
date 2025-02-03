@@ -20,6 +20,11 @@ This tool allows you to visualize the inner workings of a neural network model. 
 
 Python can be downloaded from the official website: [python.org](https://www.python.org/downloads/)
 
+### PyTorch
+
+If you want to use PyTorch with GPU support (recomended), check [PyTorch documentation](https://pytorch.org/get-started/locally/) for intrustions.
+
+
 ## Installation
 
 1. Clone the repository:
@@ -37,13 +42,20 @@ Python can be downloaded from the official website: [python.org](https://www.pyt
     pip install -r requirements.txt
     ```
 
+note: the PyTorch included in the requirements file is for CPU support.
+
 <br>
 
 ## How to Use
 
+Open your desired Python file:
+- RunNeuralNetTensor.py for Tensor models.
+- RunNeuralNetTorch.py for Torch models. (WORK IN PROGRESS)
+
+
 ### Select a Model:
 - Click on the "Select Model" button to open a file dialog.
-- Choose the .keras model file to load.
+- Choose the `.keras` (Tensor) or `.pt` (Torch) model file to load.
 
 
 ### Input Data:
@@ -136,7 +148,7 @@ Feature3, 0.2
 
 # Troubleshooting
 
-- Ensure that the model file is in the correct `.keras` format.
+- Ensure that the model file is in the correct `.keras` format for Tensor or in `.pt` for Torch.
 - Ensure that the mapping file `MappingValues.csv` is available in the same directory as the model file.
 - Check the console for any error messages.
 - If you are still facing issues, you can directly contact me at theaypisamfpv@gmail.com.

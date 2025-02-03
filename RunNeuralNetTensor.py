@@ -1,7 +1,7 @@
 from sklearn.cluster import AgglomerativeClustering
 from tkinter import Tk, filedialog
 import tensorflow as tf
-import NeuralNet as dnn
+import NeuralNetTensor as dnn
 import pandas as pd
 import numpy as np
 import pyperclip
