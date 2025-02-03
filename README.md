@@ -42,7 +42,7 @@ If you want to use PyTorch with GPU support (recomended), check [PyTorch documen
     pip install -r requirements.txt
     ```
 
-note: the PyTorch included in the requirements file is for CPU support.
+*note: the PyTorch included in the requirements file is for CPU support.*
 
 <br>
 
@@ -50,7 +50,7 @@ note: the PyTorch included in the requirements file is for CPU support.
 
 Open your desired Python file:
 - RunNeuralNetTensor.py for Tensor models.
-- RunNeuralNetTorch.py for Torch models. (WORK IN PROGRESS)
+- *RunNeuralNetTorch.py for Torch models.* **(WORK IN PROGRESS)**
 
 
 ### Select a Model:
