@@ -15,25 +15,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from joblib import Parallel, delayed
-import multiprocessing
-
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import seaborn as sns
 
 
-# Set environment variables to limit the number of threads used by OpenMP and other libraries
-os.environ['OMP_NUM_THREADS'] = '11'
-os.environ['OPENBLAS_NUM_THREADS'] = '11'
-os.environ['MKL_NUM_THREADS'] = '11'
-os.environ['VECLIB_MAXIMUM_THREADS'] = '11'
-os.environ['NUMEXPR_NUM_THREADS'] = '11'
-
 # Set a random seed for reproducibility
 RANDOM_SEED = np.random.randint(0, 1000) # random seed per run of the program, but the same for all randoms functions for reproducibility after training
 np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 deviceName = "cuda" if torch.cuda.is_available() else "cpu"
 if torch.cuda.is_available():
@@ -44,6 +35,7 @@ def saveCustomMapping(defaultMappingFilePath:str, updatedMappingFilePath:str, sp
     """
     Load default mapping file and save the updated mapping file
     """
+    print("\nUpdated mapping file...", end='\r')
     # Load the default mapping file
     defaultMapping = pd.read_csv(defaultMappingFilePath)
 
@@ -57,7 +49,7 @@ def saveCustomMapping(defaultMappingFilePath:str, updatedMappingFilePath:str, sp
         updatedMappingFilePath += '.csv'
     
     defaultMapping.to_csv(updatedMappingFilePath, index=False)
-    print(f"\nUpdated mapping file saved as '{updatedMappingFilePath}'\n")
+    print(f"Updated mapping file saved as '{updatedMappingFilePath}'\n")
 
 def loadAndPreprocessData(filePath:str, specifiedColumnsToDrop:list = [], binaryToMultiple:bool = False):
     """Load and preprocess the dataset from a CSV file.
@@ -131,41 +123,107 @@ def loadAndPreprocessData(filePath:str, specifiedColumnsToDrop:list = [], binary
     return features, targets
 
 
-class NeuralNetModel(nn.Module):
-    def __init__(self, layers, inputActivation, hiddenActivation, outputActivation, dropoutRates):
-        super(NeuralNetModel, self).__init__()
-        layerList = []
-        # Input layer
-        layerList.append(nn.Linear(layers[0], layers[1]))
-        layerList.append(nn.ReLU() if inputActivation.lower()=='relu' else nn.Tanh())
-        layerList.append(nn.BatchNorm1d(layers[1]))
-        layerList.append(nn.Dropout(dropoutRates[0]))
+class NeuralNet(nn.Module):
+    def __init__(self, layers, dropoutRates, l2Reg, inputActivation, hiddenActivation, outputActivation):
+        super(NeuralNet, self).__init__()
+        self.layers = nn.ModuleList()
+        self.dropoutRates = dropoutRates
+        self.l2Reg = l2Reg
 
-        # Hidden layers
-        prev = layers[1]
-        for i, hidden in enumerate(layers[2:-1]):
-            layerList.append(nn.Linear(prev, hidden))
-            layerList.append(nn.ReLU() if hiddenActivation.lower()=='relu' else nn.Tanh())
-            layerList.append(nn.BatchNorm1d(hidden))
-            dropoutIdx = min(i+1, len(dropoutRates)-1)
-            layerList.append(nn.Dropout(dropoutRates[dropoutIdx]))
-            prev = hidden
+        # Add input layer
+        self.layers.append(nn.Linear(layers[0], layers[1]))
+        self.layers.append(self.getActivation(inputActivation))
+        self.layers.append(nn.BatchNorm1d(layers[1]))
+        self.layers.append(nn.Dropout(dropoutRates[0]))
 
-        # Output layer
-        layerList.append(nn.Linear(prev, layers[-1]))
-        if outputActivation.lower()=='sigmoid':
-            layerList.append(nn.Sigmoid())
-        elif outputActivation.lower()=='softmax':
-            layerList.append(nn.Softmax(dim=1))
+        # Add hidden layers
+        for i in range(1, len(layers) - 2):
+            self.layers.append(nn.Linear(layers[i], layers[i + 1]))
+            self.layers.append(self.getActivation(hiddenActivation))
+            self.layers.append(nn.BatchNorm1d(layers[i + 1]))
+            dropoutRateIndex = min(i, len(dropoutRates) - 1)
+            self.layers.append(nn.Dropout(dropoutRates[dropoutRateIndex]))
 
-        self.net = nn.Sequential(*layerList)
+        # Add output layer
+        self.layers.append(nn.Linear(layers[-2], layers[-1]))
+        self.layers.append(self.getActivation(outputActivation))
+
+    def getActivation(self, activation):
+        if activation.lower() == 'relu':
+            return nn.ReLU()
+        elif activation.lower() == 'sigmoid':
+            return nn.Sigmoid()
+        elif activation.lower() == 'tanh':
+            return nn.Tanh()
+        else:
+            raise ValueError(f"Unsupported activation function: {activation}")
 
     def forward(self, x):
-        return self.net(x)
+        for layer in self.layers:
+            if isinstance(layer, nn.BatchNorm1d) and x.size(0) == 1:
+                continue  # Skip batch normalization if batch size is 1
+            x = layer(x)
+        return x
+
+    def fit(self, trainLoader, testLoader, optimizer, lossFn, epochs):
+        bestValAccuracy = 0
+        patience = 10
+        patienceCounter = 0
+        valAccuracyHistory = []  # Added history list
+
+        for epoch in range(epochs):
+            self.train()
+            for XBatch, yBatch in trainLoader:
+                # Move data to GPU
+                XBatch, yBatch = XBatch.to(device), yBatch.to(device)
+                optimizer.zero_grad()
+                outputs = self(XBatch)
+                loss = lossFn(outputs, yBatch)
+                loss.backward()
+                optimizer.step()
+
+            self.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for XBatch, yBatch in testLoader:
+                    # Move data to GPU
+                    XBatch, yBatch = XBatch.to(device), yBatch.to(device)
+                    outputs = self(XBatch)
+                    predicted = outputs
+                    # Compute correctness as: 1 - absolute error (e.g., predicted 0.5 for target 1 gives 0.5 correct)
+                    correct += torch.sum(1 - torch.abs(predicted - yBatch))
+                    total += yBatch.numel()
+
+            
+
+            valAccuracy = correct / total
+            # Convert tensor to float for history and bestValAccuracy storage.
+            valAccFloat = valAccuracy.item()
+            
+            # print("\ncorrect", correct)
+            # print("total", total)
+            # print("valAccuracy", valAccFloat)
+            valAccuracyHistory.append(valAccFloat)  # Record history per epoch
+            if valAccFloat > bestValAccuracy:
+                bestValAccuracy = valAccFloat
+                patienceCounter = 0
+            else:
+                patienceCounter += 1
+
+            if patienceCounter >= patience:
+                break
+
+        # print(f"Best validation accuracy: {bestValAccuracy:.4f}")
+        # print("------")
+
+        return bestValAccuracy, valAccuracyHistory
+
+
 
 def buildNeuralNetModel(layers, inputActivation, hiddenActivation, outputActivation, metrics, loss, optimizer, dropoutRates, l2_reg=0.01):
     # Note: l2_reg will be passed to the optimizer via 'weight_decay'
-    model = NeuralNetModel(layers, inputActivation, hiddenActivation, outputActivation, dropoutRates)
+    model = NeuralNet(layers, dropoutRates, l2_reg, inputActivation, hiddenActivation, outputActivation)
     return model
 
 def trainNeuralNet(
@@ -207,42 +265,21 @@ def trainNeuralNet(
     # Loss function
     criterion = nn.BCELoss() if loss=='binary_crossentropy' else nn.MSELoss()
 
-    # Create tensors on CPU; allow DataLoader to move batches to GPU later
+    # Create training DataLoader
     trainX = torch.tensor(TrainingFeatures.values, dtype=torch.float32)
     trainy = torch.tensor(trainingLabels.values, dtype=torch.float32).unsqueeze(1)
+    trainDataset = torch.utils.data.TensorDataset(trainX, trainy)
+    trainLoader = torch.utils.data.DataLoader(trainDataset, batch_size=batchSize, shuffle=True, pin_memory=True)
 
-    dataset = torch.utils.data.TensorDataset(trainX, trainy)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=True, pin_memory=True)
+    # Create testing DataLoader
+    testX = torch.tensor(TestFeatures.values, dtype=torch.float32)
+    testy = torch.tensor(testLabels.values, dtype=torch.float32).unsqueeze(1)
+    testDataset = torch.utils.data.TensorDataset(testX, testy)
+    testLoader = torch.utils.data.DataLoader(testDataset, batch_size=batchSize, shuffle=False, pin_memory=True)
 
-    history = {'loss': [], 'Accuracy': []}
-    for epoch in range(epochs):
-        model.train()
-        epochLoss = 0
-        correct = 0
-        total = 0
-        for batchX, batchY in dataloader:
-            # Move batch to GPU (if available) inside the training loop
-            batchX = batchX.to(device, non_blocking=True)
-            batchY = batchY.to(device, non_blocking=True)
-            
-            optimizer.zero_grad()
-            outputs = model(batchX)
-            lossVal = criterion(outputs, batchY)
-            lossVal.backward()
-            optimizer.step()
+    bestValAccuracy, valAccuracyHistory = model.fit(trainLoader, testLoader, optimizer, criterion, epochs)
 
-            epochLoss += lossVal.item() * batchX.size(0)
-            predicted = (outputs > 0.5).float()
-            total += batchY.size(0)
-            correct += (predicted == batchY).sum().item()
-
-        epochLoss /= len(dataset)
-        accuracy = correct / total
-        history['loss'].append(epochLoss)
-        history['Accuracy'].append(accuracy)
-        if verbose:
-            print(f"Epoch {epoch+1}/{epochs} - Loss: {epochLoss:.4f} - Accuracy: {accuracy*100:.2f}%")
-
+    history = {'valAccuracyHistory': valAccuracyHistory, 'bestValAccuracy': bestValAccuracy}
     return model, history
 
 def detectOverfitting(history, lossFunction):
@@ -262,10 +299,10 @@ def detectOverfitting(history, lossFunction):
         - A confirmation message if the model is not overfitting.
     """
     print("----------------------------------")
-    trainAcc = history.history['Accuracy']
-    valAcc = history.history['val_Accuracy']
-    trainLoss = history.history['loss']
-    valLoss = history.history['val_loss']
+    trainAcc = history['Accuracy']
+    valAcc = history['val_Accuracy']
+    trainLoss = history['loss']
+    valLoss = history['val_loss']
 
     if lossFunction == 'squared_hinge':
         valLoss = np.array(valLoss) - 1
@@ -376,7 +413,7 @@ def saveModel(model: nn.Module, filePath: str):
     Raises:
         IOError: If the model cannot be saved to the specified path.
     """
-    print(f"\nSaving model...")
+    print("Saving model...", end='\r')
     if not filePath.endswith('.pt'):
         filePath += '.pt'
 
@@ -416,27 +453,27 @@ def plotLearningCurve(history, epochs, elapsedTime, lossFunction):
 
     # Adjust val_loss if the loss function is squared_hinge
     if lossFunction == 'squared_hinge':
-        adjustedValLoss = np.array(history.history['val_loss']) - 1
+        adjustedValLoss = np.array(history['val_loss']) - 1
     else:
-        adjustedValLoss = np.array(history.history['val_loss'])
+        adjustedValLoss = np.array(history['val_loss'])
 
     def animate(i):
         ax1.clear()
         ax2.clear()
 
-        if i < len(history.history['Accuracy']):
+        if i < len(history['Accuracy']):
             ax1.plot(
-                np.array(history.history['Accuracy'][:i]) * 100,
+                np.array(history['Accuracy'][:i]) * 100,
                 color=lineColorTrain,
                 label='Train Accuracy'
             )
             ax1.plot(
-                np.array(history.history['val_Accuracy'][:i]) * 100,
+                np.array(history['val_Accuracy'][:i]) * 100,
                 color=lineColorVal,
                 label='Validation Accuracy'
             )
             ax2.plot(
-                np.array(history.history['loss'][:i]),
+                np.array(history['loss'][:i]),
                 color=lineColorTrain,
                 label='Train Loss'
             )
@@ -447,17 +484,17 @@ def plotLearningCurve(history, epochs, elapsedTime, lossFunction):
             )
         else:
             ax1.plot(
-                np.array(history.history['Accuracy']) * 100,
+                np.array(history['Accuracy']) * 100,
                 color=lineColorTrain,
                 label='Train Accuracy'
             )
             ax1.plot(
-                np.array(history.history['val_Accuracy']) * 100,
+                np.array(history['val_Accuracy']) * 100,
                 color=lineColorVal,
                 label='Validation Accuracy'
             )
             ax2.plot(
-                np.array(history.history['loss']),
+                np.array(history['loss']),
                 color=lineColorTrain,
                 label='Train Loss'
             )
@@ -495,7 +532,7 @@ def plotLearningCurve(history, epochs, elapsedTime, lossFunction):
     ani = animation.FuncAnimation(
         fig,
         animate,
-        frames=len(history.history['Accuracy']) + pauseFrames,
+        frames=len(history['Accuracy']) + pauseFrames,
         interval=50,
         repeat=False
     )
@@ -615,12 +652,12 @@ def runGridSearch(features, target, paramGrid: dict):
     bestValAccuracyHistory = []  # List to store best validation accuracy history
 
     print(getProgressBar(0, progressWheelIndex) +
-          "Best Accuracy: --.--%  |  Time remaining: --h--min --s  |  est. Finish Time: --h--", end='\r')
+          "Iteration Accuracy: --.--% / Best Accuracy: --.--%  |  Time remaining: --h--min --s  |  est. Finish Time: --h--", end='\r')
 
     for idx, params in enumerate(grid, 1):
         trainStartTime = pd.Timestamp.now()
         try:
-            model, history = trainNeuralNet(
+            _, history = trainNeuralNet(
                 features=features,
                 target=target,
                 layers=params['layers'],
@@ -637,7 +674,7 @@ def runGridSearch(features, target, paramGrid: dict):
                 l2_reg=params['l2_reg'],
                 verbose=0
             )
-            valAccuracy = history.get('val_Accuracy', [0])[-1]
+            valAccuracy = history.get('bestValAccuracy', [0])
         except Exception as e:
             print(f"-- Error in iteration {idx}: {e} --")
             valAccuracy = 0.0
@@ -676,12 +713,12 @@ def runGridSearch(features, target, paramGrid: dict):
         
         completion = progressWheelIndex / totalGrid
         print(getProgressBar(completion, progressWheelIndex) +
-              f"Best Accuracy: {bestAccuracy * 100:.2f}%  |  Time remaining: {estTimeStr}  |  est. Finish Time: {estFinishTimeStr}", end='\r')
+              f"Iteration Accuracy: {valAccuracy*100:.2f}% / Best Accuracy: {bestAccuracy * 100:.2f}%  |  Time remaining: {estTimeStr}  |  est. Finish Time: {estFinishTimeStr}   ", end='\r')
 
 
 
 
-    print(getProgressBar(1, progressWheelIndex) + f"Best Accuracy: {bestAccuracy * 100:.2f}%", end='\r')
+    print(getProgressBar(1, progressWheelIndex) + f"Iteration Accuracy: {valAccuracy*100:.2f}% / Best Accuracy: {bestAccuracy * 100:.2f}%", end='\r')
     searchEndTime = pd.Timestamp.now()
     elapsedTime = searchEndTime - searchStartTime
     print(f"\n\nGrid search completed in {int(elapsedTime.components.hours):02}h "
@@ -772,7 +809,7 @@ def runModelTraining():
     tableToDrop = ['AverageHoursWorked']
 
     # Load and preprocess the dataset
-    datasetFilePath = r'D:\Cesi\FISE3\4_I.A_machine_learning\AI-Project\GeneratedDataSet\ModelDataSet.csv'
+    datasetFilePath = r'D:\Cesi\Ripo\Cesi\FISE3\4_AI\AI-Project\GeneratedDataSet\ModelDataSet.csv'
     features, targets = loadAndPreprocessData(datasetFilePath, tableToDrop, binaryToMultiple=False)
 
     outputNeuronsNumber = targets.shape[1] if len(targets.shape) > 1 else 1
@@ -781,7 +818,7 @@ def runModelTraining():
     hyperparameterGrid = {
         'layers': [
             [features.shape[1], 512, 256, 128, 64, outputNeuronsNumber],
-            [features.shape[1], 1024, 512, 64, outputNeuronsNumber],
+            # [features.shape[1], 1024, 512, 64, outputNeuronsNumber],
             
         ],
         'epochs': [150],
@@ -794,7 +831,7 @@ def runModelTraining():
         'learningRate': [0.001, 0.0005],
         "metrics": [
             # ['Accuracy', 'Recall', 'Precision'],
-            ['Accuracy', 'Precision'],
+            # ['Accuracy', 'Precision'],
             ['Accuracy', 'Recall'],
             # ['Accuracy'],
         ],
@@ -813,13 +850,15 @@ def runModelTraining():
     # Create the model directory after finding the best parameters
     os.makedirs(os.path.dirname(modelDirectory), exist_ok=True)
 
-    defaultMappingFilePath = r'GeneratedDataSet\MappingValues.csv'
+    defaultMappingFilePath = r'D:\Cesi\Ripo\Cesi\FISE3\4_AI\AI-Project\GeneratedDataSet\MappingValues.csv'
     updatedMappingFilePath = modelDirectory + 'MappingValues.csv'
     saveCustomMapping(defaultMappingFilePath, updatedMappingFilePath, tableToDrop)
 
 
     # Record the start time of training
     startTrainingTime = pd.Timestamp.now()
+
+    print("\nTraining the final model with the best parameters...")
 
     # Use bestParams to train the final model
     model, history = trainNeuralNet(
@@ -849,8 +888,8 @@ def runModelTraining():
     # Check for overfitting
     detectOverfitting(history, bestParams['loss'])
 
-    trainAccuracy = history.history['Accuracy'][-1]
-    validationAccuracy = history.history['val_Accuracy'][-1]
+    trainAccuracy = history['Accuracy'][-1]
+    validationAccuracy = history['val_Accuracy'][-1]
 
     modelName = modelDirectory + f"Model_{trainAccuracy:.2f}_{validationAccuracy:.2f}_{elapsedTime.total_seconds()}s"
 
@@ -861,7 +900,10 @@ def runModelTraining():
     paramsFilePath = modelName + ".params"
     with open(paramsFilePath, 'w') as paramsFile:
         json.dump(bestParams, paramsFile)
+    
     print(f"Model parameters saved as '{paramsFilePath}'")
+
+    return savePath
 
     # Plot and save the learning curve
     plot = plotLearningCurve(history, bestParams['epochs'], elapsedTime, bestParams['loss'])
