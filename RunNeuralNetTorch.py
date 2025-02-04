@@ -1,3 +1,4 @@
+print("Loading dependencies...", end="\r")
 from sklearn.cluster import AgglomerativeClustering
 from tkinter import Tk, filedialog
 import pandas as pd
@@ -11,7 +12,7 @@ import json
 import time
 import csv
 import os
-
+print("Loading dependencies done.")
 
 
 class NeuralNetApp:
@@ -626,10 +627,12 @@ class NeuralNetApp:
         self.displayValues = displayValues
 
         if not self.enableClustering:
-            print("\n=============================================")
-            print("Clustering is disabled. This may lead to a large number of neurons being visualized, thus slowing down the visualization.")
-            print("Use clustering for models with a large number of neurons to improve performance.")
-            print("=============================================\n")
+            print("""
+=========================================================================================================================
+Clustering is disabled. This may lead to a large number of neurons being visualized, thus slowing down the visualization.
+Use clustering for models with a large number of neurons to improve performance.                                         
+=========================================================================================================================
+""")
 
         while self.running:
             self.screen.set_clip(
@@ -736,6 +739,7 @@ class NeuralNetApp:
                         for lineIndex, line in enumerate(wrappedErrorText):
                             errorText = errorFont.render(line, True, self.NEGATIVE_COLOR)
                             self.screen.blit(errorText, (self.leftMargin, self.topMargin + lineIndex * (errorFont.get_height() + 5)))
+
                         self.modelFilePath = None
 
                     else:
@@ -926,6 +930,7 @@ class NeuralNetApp:
 
 
 def main():
+    print("Loading Neural Network Visualizer...")
     neuralNetVis = NeuralNetApp()
     neuralNetVis.mainLoop(displayValues=False)
 

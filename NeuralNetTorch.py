@@ -23,7 +23,6 @@ import matplotlib.animation as animation
 import seaborn as sns
 
 
-
 # Set environment variables to limit the number of threads used by OpenMP and other libraries
 os.environ['OMP_NUM_THREADS'] = '11'
 os.environ['OPENBLAS_NUM_THREADS'] = '11'
@@ -35,6 +34,8 @@ os.environ['NUMEXPR_NUM_THREADS'] = '11'
 RANDOM_SEED = np.random.randint(0, 1000) # random seed per run of the program, but the same for all randoms functions for reproducibility after training
 np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+deviceName = "cuda" if torch.cuda.is_available() else "cpu"
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(RANDOM_SEED)
 
@@ -178,36 +179,40 @@ def trainNeuralNet(
     outputActivation: str = 'sigmoid',
     metrics: list = ['Accuracy'],
     loss: str = 'binary_crossentropy',
-    optimizer_choice: str = 'adam',
+    optimizerChoice: str = 'adam',
     dropoutRates: list[float] = [0.5],
     trainingTestingSplit: float = 0.2,
     l2_reg: float = 0.01,
     verbose: int = 1
 ):
-    # Split dataset (using same strategy as before)
+    # Split dataset
     TrainingFeatures, TestFeatures, trainingLabels, testLabels = train_test_split(
         features, target, test_size=trainingTestingSplit, random_state=RANDOM_SEED, stratify=target
     )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = buildNeuralNetModel(layers, inputActivation, hiddenActivation, outputActivation, metrics, loss, optimizer_choice, dropoutRates, l2_reg)
+    model = buildNeuralNetModel(layers, inputActivation, hiddenActivation, outputActivation, metrics, loss, optimizerChoice, dropoutRates, l2_reg)
     model.to(device)
 
     # Prepare optimizer (pass l2_reg as weight_decay)
-    if optimizer_choice.lower()=='adam':
+    optimizerChoice = optimizerChoice.lower()
+    if optimizerChoice == 'adam':
         optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=l2_reg)
-    else:
+    elif optimizerChoice == 'rmsprop':
+        optimizer = optim.RMSprop(model.parameters(), lr=0.001, weight_decay=l2_reg)
+    elif optimizerChoice == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=0.001, weight_decay=l2_reg)
+    else:
+        raise ValueError(f"Unknown optimizer: {optimizerChoice}")
 
     # Loss function
     criterion = nn.BCELoss() if loss=='binary_crossentropy' else nn.MSELoss()
 
-    # Convert data to torch tensors
-    trainX = torch.tensor(TrainingFeatures.values, dtype=torch.float32).to(device)
-    trainy = torch.tensor(trainingLabels.values, dtype=torch.float32).unsqueeze(1).to(device)
+    # Create tensors on CPU; allow DataLoader to move batches to GPU later
+    trainX = torch.tensor(TrainingFeatures.values, dtype=torch.float32)
+    trainy = torch.tensor(trainingLabels.values, dtype=torch.float32).unsqueeze(1)
 
     dataset = torch.utils.data.TensorDataset(trainX, trainy)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=True, pin_memory=True)
 
     history = {'loss': [], 'Accuracy': []}
     for epoch in range(epochs):
@@ -215,17 +220,21 @@ def trainNeuralNet(
         epochLoss = 0
         correct = 0
         total = 0
-        for batch_X, batch_y in dataloader:
+        for batchX, batchY in dataloader:
+            # Move batch to GPU (if available) inside the training loop
+            batchX = batchX.to(device, non_blocking=True)
+            batchY = batchY.to(device, non_blocking=True)
+            
             optimizer.zero_grad()
-            outputs = model(batch_X)
-            lossVal = criterion(outputs, batch_y)
+            outputs = model(batchX)
+            lossVal = criterion(outputs, batchY)
             lossVal.backward()
             optimizer.step()
 
-            epochLoss += lossVal.item() * batch_X.size(0)
+            epochLoss += lossVal.item() * batchX.size(0)
             predicted = (outputs > 0.5).float()
-            total += batch_y.size(0)
-            correct += (predicted == batch_y).sum().item()
+            total += batchY.size(0)
+            correct += (predicted == batchY).sum().item()
 
         epochLoss /= len(dataset)
         accuracy = correct / total
@@ -234,7 +243,6 @@ def trainNeuralNet(
         if verbose:
             print(f"Epoch {epoch+1}/{epochs} - Loss: {epochLoss:.4f} - Accuracy: {accuracy*100:.2f}%")
 
-    # You can similarly evaluate on TestFeatures later.
     return model, history
 
 def detectOverfitting(history, lossFunction):
@@ -519,7 +527,7 @@ def evaluateModel(model, TestFeatures, actualLabels, threshold=0.3, verbose=1):
         - Classification report showing precision, recall, f1-score, and support.
         - Confusion matrix showing true positives, true negatives, false positives, and false negatives.
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     model.eval()
     with torch.no_grad():
         test_X = torch.tensor(TestFeatures.values, dtype=torch.float32).to(device)
@@ -565,7 +573,7 @@ def loadModel(modelPath: str, modelClass, modelArgs: tuple, verbose=1):
 
 
 def predictWithModel(model, inputData):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     model.eval()
     with torch.no_grad():
         inputTensor = torch.tensor(inputData, dtype=torch.float32).to(device)
@@ -575,8 +583,8 @@ def predictWithModel(model, inputData):
     return prediction.cpu().numpy(), None
 
 
-def runGridSearch(features, target, paramGrid:dict, CPULimitation:float = 0.7):
-    """Perform a grid search to find the best combination of hyperparameters.
+def runGridSearch(features, target, paramGrid: dict):
+    """Perform a grid search to find the best combination of hyperparameters without multiprocessing.
 
     This function tests various combinations of neural network architectures and training parameters
     to identify the configuration that yields the highest validation accuracy.
@@ -584,49 +592,34 @@ def runGridSearch(features, target, paramGrid:dict, CPULimitation:float = 0.7):
     Args:
         features (pd.DataFrame): The preprocessed feature columns.
         target (pd.Series): The target variable column.
+        paramGrid (dict): The grid of parameters to search over.
 
     Returns:
-        dict: A dictionary containing the best hyperparameters found during grid search.
-
-    Prints:
-        - The best accuracy achieved.
-        - The corresponding best hyperparameters.
+        dict: A dictionary containing the best hyperparameters found during grid search and the model directory.
     """
     searchStartTime = pd.Timestamp.now()
     
-    grid = ParameterGrid(paramGrid)
+    grid = list(ParameterGrid(paramGrid))
     totalGrid = len(grid)
+
+    if deviceName not in ['cpu', 'cuda']:
+        raise ValueError(f"Unknown device: {deviceName}")
     
-    cpuCount = multiprocessing.cpu_count()
-    nJobs = max(1, floor(cpuCount * CPULimitation))
+    print(f"\n\nRunning grid search sequentially for {totalGrid} parameter combination{'s' if totalGrid > 1 else ''} on {deviceName}...")
+    
+    bestAccuracy = 0.0
+    bestParams = {}
+    progressWheelIndex = 0
+    totalElapsedTime = 0.0
+    valAccuracyHistory = []  # List to store validation accuracy history
+    bestValAccuracyHistory = []  # List to store best validation accuracy history
 
-    print(f"\n\nRunning grid search on {nJobs} CPU cores (power equivalent) for {totalGrid} parameters combinations...")
+    print(getProgressBar(0, progressWheelIndex) +
+          "Best Accuracy: --.--%  |  Time remaining: --h--min --s  |  est. Finish Time: --h--", end='\r')
 
-    manager = multiprocessing.Manager()
-    bestAccuracy = manager.Value('d', 0.0)
-    bestParams = manager.dict()
-    progressWheelIndex = manager.Value('i', 0)
-    totalElapsedTime = manager.Value('d', 0.0)
-    valAccuracyHistory = manager.list()  # List to store validation accuracy history
-    bestValAccuracyHistory = manager.list()  # List to store best validation accuracy history
-
-    print(getProgressBar(0, progressWheelIndex.value) + "Best Accuracy: --.--%  |  Time remaining: --h--min --s  |  est. Finish Time: --h--", end='\r')
-
-    def evaluate(params, idx, bestAccuracy, bestParams, valAccuracyHistory):
+    for idx, params in enumerate(grid, 1):
         trainStartTime = pd.Timestamp.now()
-        
         try:
-
-            optimizerName = params['optimizer'].lower()
-            if optimizerName == 'adam':
-                optimizer = optim.Adam(model.parameters(), lr=params['learningRate'])
-            elif optimizerName == 'rmsprop':
-                optimizer = optim.RMSprop(model.parameters(), lr=params['learningRate'])
-            elif optimizerName == 'sgd':
-                optimizer = optim.SGD(model.parameters(), lr=params['learningRate'])
-            else:
-                raise ValueError(f"Unknown optimizer: {optimizer}")
-            
             model, history = trainNeuralNet(
                 features=features,
                 target=target,
@@ -638,39 +631,35 @@ def runGridSearch(features, target, paramGrid:dict, CPULimitation:float = 0.7):
                 outputActivation=params['outputActivation'],
                 metrics=params['metrics'],
                 loss=params['loss'],
-                optimizer=optimizer,
+                optimizerChoice=params['optimizer'],
                 dropoutRates=params['dropoutRate'],
                 trainingTestingSplit=params['trainingTestingSplit'],
                 l2_reg=params['l2_reg'],
                 verbose=0
-            )        
-            valAccuracy = history.history.get('val_Accuracy', [0])[-1]
-            
+            )
+            valAccuracy = history.get('val_Accuracy', [0])[-1]
         except Exception as e:
             print(f"-- Error in iteration {idx}: {e} --")
             valAccuracy = 0.0
-
-        valAccuracyHistory.append(valAccuracy)  # Append validation accuracy to history
-        if valAccuracy > bestAccuracy.value:
-            bestAccuracy.value = valAccuracy
-            bestParams.update(params)
-
-        bestValAccuracyHistory.append(bestAccuracy.value)  # Append best validation accuracy to history
-
-        # Update index for progress wheel
-        progressWheelIndex.value += 1
-
+        
+        valAccuracyHistory.append(valAccuracy)
+        if valAccuracy > bestAccuracy:
+            bestAccuracy = valAccuracy
+            bestParams = params.copy()
+        
+        bestValAccuracyHistory.append(bestAccuracy)
+        
+        progressWheelIndex += 1
+        
         trainEndTime = pd.Timestamp.now()
-        elapsedTrainTime = trainEndTime - trainStartTime
-        totalElapsedTime.value += elapsedTrainTime.total_seconds()
-
-        averageTime = (totalElapsedTime.value / progressWheelIndex.value) / nJobs
-
-        estTimeRemaining = averageTime * (totalGrid - progressWheelIndex.value)
+        elapsedTrainTime = (trainEndTime - trainStartTime).total_seconds()
+        totalElapsedTime += elapsedTrainTime
+        
+        averageTime = totalElapsedTime / progressWheelIndex
+        estTimeRemaining = averageTime * (totalGrid - progressWheelIndex)
         estHours = int(estTimeRemaining // 3600)
         estMinutes = int((estTimeRemaining % 3600) // 60)
         estSeconds = int(estTimeRemaining % 60)
-
         estDays = estHours // 24
         estHours = estHours % 24
 
@@ -678,47 +667,47 @@ def runGridSearch(features, target, paramGrid:dict, CPULimitation:float = 0.7):
             estTimeStr = f"{estDays}day{'s' if estDays > 1 else ''} {estHours:02}h{estMinutes:02}min {estSeconds:02}s"
         else:
             estTimeStr = f"{estHours:02}h{estMinutes:02}min {estSeconds:02}s"
-
+            
         estFinishTime = pd.Timestamp.now() + pd.Timedelta(seconds=estTimeRemaining)
-        if estTimeRemaining > 86400:  # More than 24 hours
+        if estTimeRemaining > 86400:
             estFinishTimeStr = estFinishTime.strftime('%d %b %Y %H:%M')
         else:
             estFinishTimeStr = f"{estFinishTime.hour:02}h{estFinishTime.minute:02}"
+        
+        completion = progressWheelIndex / totalGrid
+        print(getProgressBar(completion, progressWheelIndex) +
+              f"Best Accuracy: {bestAccuracy * 100:.2f}%  |  Time remaining: {estTimeStr}  |  est. Finish Time: {estFinishTimeStr}", end='\r')
 
-        completion = progressWheelIndex.value / totalGrid
-        print(getProgressBar(completion, progressWheelIndex.value) + f"Best Accuracy: {bestAccuracy.value * 100:.2f}%  |  Time remaining: {estTimeStr}  |  est. Finish Time: {estFinishTimeStr}", end='\r')
 
-        return valAccuracy, params
 
-    results = Parallel(n_jobs=nJobs)(
-        delayed(evaluate)(params, idx, bestAccuracy, bestParams, valAccuracyHistory) for idx, params in enumerate(grid, 1)
-    )
 
-    print(getProgressBar(1, progressWheelIndex.value) + f"Best Accuracy: {bestAccuracy.value * 100:.2f}%", end='\r')
+    print(getProgressBar(1, progressWheelIndex) + f"Best Accuracy: {bestAccuracy * 100:.2f}%", end='\r')
     searchEndTime = pd.Timestamp.now()
-
     elapsedTime = searchEndTime - searchStartTime
-    print(f"\n\nGrid search completed in {int(elapsedTime.components.hours):02}h {int(elapsedTime.components.minutes):02}min {int(elapsedTime.components.seconds):02}s (average training time: {totalElapsedTime.value / totalGrid:.2f}s)")
+    print(f"\n\nGrid search completed in {int(elapsedTime.components.hours):02}h "
+          f"{int(elapsedTime.components.minutes):02}min {int(elapsedTime.components.seconds):02}s "
+          f"(average training time: {totalElapsedTime / totalGrid:.2f}s)")
 
     # add the random seed to the best parameters
     bestParams['randomSeed'] = RANDOM_SEED
 
-    print(f"\nBest Accuracy: {bestAccuracy.value * 100:.2f}%")
+    print(f"\nBest Accuracy: {bestAccuracy * 100:.2f}%")
     print("Best Parameters:")
     paramstr = "\n".join([f"\t{k}: {v}" for k, v in bestParams.items()])
     print(paramstr)
 
     # generate the model ID (check in the Models folder for the latest model, and increment the id)
     lastId = 0
-    for file in os.listdir('Models'):
-        if file.startswith('TrainedModel_'):
-            try:
-                lastId = max(lastId, int(file.split('_')[-1]))
-            except:
-                pass
-    
+    if os.path.exists('Models'):
+        for file in os.listdir('Models'):
+            if file.startswith('TrainedModel_'):
+                try:
+                    lastId = max(lastId, int(file.split('_')[-1]))
+                except Exception:
+                    pass
+
     modelId = lastId + 1
-    modelHash = str(hash(str(bestParams)))[:6] # hash the best parameters to get a unique id (6 characters long)
+    modelHash = str(hash(str(bestParams)))[:6]
     modelDirectory = f'Models/TrainedModel_{modelHash}_{modelId}/'
     backgroundColor = '#222222'
 
@@ -783,7 +772,7 @@ def runModelTraining():
     tableToDrop = ['AverageHoursWorked']
 
     # Load and preprocess the dataset
-    datasetFilePath = r'GeneratedDataSet\ModelDataSet.csv'
+    datasetFilePath = r'D:\Cesi\FISE3\4_I.A_machine_learning\AI-Project\GeneratedDataSet\ModelDataSet.csv'
     features, targets = loadAndPreprocessData(datasetFilePath, tableToDrop, binaryToMultiple=False)
 
     outputNeuronsNumber = targets.shape[1] if len(targets.shape) > 1 else 1
@@ -792,7 +781,7 @@ def runModelTraining():
     hyperparameterGrid = {
         'layers': [
             [features.shape[1], 512, 256, 128, 64, outputNeuronsNumber],
-            # [features.shape[1], 1024, 512, 64, outputNeuronsNumber],
+            [features.shape[1], 1024, 512, 64, outputNeuronsNumber],
             
         ],
         'epochs': [150],
@@ -817,11 +806,9 @@ def runModelTraining():
         'optimizer': ['adam']
     }
 
-    powerLimitation = 0.8
-
     # Start hyperparameter grid search
     print("\nStarting Grid Search for Hyperparameter Optimization...")
-    bestParams, modelDirectory = runGridSearch(features, targets, hyperparameterGrid, powerLimitation)
+    bestParams, modelDirectory = runGridSearch(features, targets, hyperparameterGrid)
 
     # Create the model directory after finding the best parameters
     os.makedirs(os.path.dirname(modelDirectory), exist_ok=True)
@@ -830,11 +817,11 @@ def runModelTraining():
     updatedMappingFilePath = modelDirectory + 'MappingValues.csv'
     saveCustomMapping(defaultMappingFilePath, updatedMappingFilePath, tableToDrop)
 
+
     # Record the start time of training
     startTrainingTime = pd.Timestamp.now()
 
     # Use bestParams to train the final model
-    optimizer = optim.Adam(model.parameters(), lr=bestParams['learningRate'])
     model, history = trainNeuralNet(
         features=features,
         target=targets,
@@ -846,7 +833,7 @@ def runModelTraining():
         outputActivation=bestParams['outputActivation'],
         metrics=bestParams['metrics'],
         loss=bestParams['loss'],
-        optimizer=optimizer,
+        optimizerChoice=bestParams['optimizer'],
         dropoutRates=bestParams['dropoutRate'],
         trainingTestingSplit=0.2,
         l2_reg=bestParams['l2_reg'],
@@ -988,5 +975,5 @@ def evaluateModelsFromDirectory(rootDir:str, dataset:tuple):
         print(modelEvaluation[1])
         print(f"Matrix Score: {modelMatrixScore}")
 
-# if __name__ == '__main__':
-    # modelPath = runModelTraining()
+if __name__ == '__main__':
+    modelPath = runModelTraining()
