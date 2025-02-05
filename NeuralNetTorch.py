@@ -166,58 +166,70 @@ class NeuralNet(nn.Module):
         return x
 
     def fit(self, trainLoader, testLoader, optimizer, lossFn, epochs):
-        bestValAccuracy = 0
-        patience = 10
-        patienceCounter = 0
-        valAccuracyHistory = []  # Added history list
-
-        for epoch in range(epochs):
-            self.train()
-            for XBatch, yBatch in trainLoader:
-                # Move data to GPU
-                XBatch, yBatch = XBatch.to(device), yBatch.to(device)
-                optimizer.zero_grad()
-                outputs = self(XBatch)
-                loss = lossFn(outputs, yBatch)
-                loss.backward()
-                optimizer.step()
-
-            self.eval()
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for XBatch, yBatch in testLoader:
+            bestValAccuracy = 0
+            patience = 10
+            patienceCounter = 0
+    
+            trainAccuracyHistory = []
+            valAccuracyHistory = []
+            trainLossHistory = []
+            valLossHistory = []
+    
+            for epoch in range(epochs):
+                epochTrainLoss = 0
+                epochTrainCorrect = 0
+                epochTrainTotal = 0
+    
+                self.train()
+                for XBatch, yBatch in trainLoader:
                     # Move data to GPU
                     XBatch, yBatch = XBatch.to(device), yBatch.to(device)
+                    optimizer.zero_grad()
                     outputs = self(XBatch)
-                    predicted = outputs
-                    # Compute correctness as: 1 - absolute error (e.g., predicted 0.5 for target 1 gives 0.5 correct)
-                    correct += torch.sum(1 - torch.abs(predicted - yBatch))
-                    total += yBatch.numel()
-
-            
-
-            valAccuracy = correct / total
-            # Convert tensor to float for history and bestValAccuracy storage.
-            valAccFloat = valAccuracy.item()
-            
-            # print("\ncorrect", correct)
-            # print("total", total)
-            # print("valAccuracy", valAccFloat)
-            valAccuracyHistory.append(valAccFloat)  # Record history per epoch
-            if valAccFloat > bestValAccuracy:
-                bestValAccuracy = valAccFloat
-                patienceCounter = 0
-            else:
-                patienceCounter += 1
-
-            if patienceCounter >= patience:
-                break
-
-        # print(f"Best validation accuracy: {bestValAccuracy:.4f}")
-        # print("------")
-
-        return bestValAccuracy, valAccuracyHistory
+                    loss = lossFn(outputs, yBatch)
+                    loss.backward()
+                    optimizer.step()
+    
+                    epochTrainLoss += loss.item() * yBatch.size(0)
+                    epochTrainCorrect += torch.sum(1 - torch.abs(outputs - yBatch)).item()
+                    epochTrainTotal += yBatch.numel()
+    
+                trainLoss = epochTrainLoss / epochTrainTotal
+                trainAcc = epochTrainCorrect / epochTrainTotal
+    
+                epochValLoss = 0
+                epochValCorrect = 0
+                epochValTotal = 0
+    
+                self.eval()
+                with torch.no_grad():
+                    for XBatch, yBatch in testLoader:
+                        # Move data to GPU
+                        XBatch, yBatch = XBatch.to(device), yBatch.to(device)
+                        outputs = self(XBatch)
+                        loss = lossFn(outputs, yBatch)
+                        epochValLoss += loss.item() * yBatch.size(0)
+                        epochValCorrect += torch.sum(1 - torch.abs(outputs - yBatch)).item()
+                        epochValTotal += yBatch.numel()
+    
+                valLoss = epochValLoss / epochValTotal
+                valAcc = epochValCorrect / epochValTotal
+    
+                trainLossHistory.append(trainLoss)
+                trainAccuracyHistory.append(trainAcc)
+                valLossHistory.append(valLoss)
+                valAccuracyHistory.append(valAcc)
+    
+                if valAcc > bestValAccuracy:
+                    bestValAccuracy = valAcc
+                    patienceCounter = 0
+                else:
+                    patienceCounter += 1
+    
+                if patienceCounter >= patience:
+                    break
+    
+            return trainAccuracyHistory, valAccuracyHistory, trainLossHistory, valLossHistory
 
 
 
@@ -277,9 +289,15 @@ def trainNeuralNet(
     testDataset = torch.utils.data.TensorDataset(testX, testy)
     testLoader = torch.utils.data.DataLoader(testDataset, batch_size=batchSize, shuffle=False, pin_memory=True)
 
-    bestValAccuracy, valAccuracyHistory = model.fit(trainLoader, testLoader, optimizer, criterion, epochs)
+    accuracy, valAccuracy, loss, valLoss  = model.fit(trainLoader, testLoader, optimizer, criterion, epochs)
 
-    history = {'valAccuracyHistory': valAccuracyHistory, 'bestValAccuracy': bestValAccuracy}
+    history = {
+        'Accuracy': accuracy,
+        'val_Accuracy': valAccuracy,
+        'loss': loss,
+        'val_loss': valLoss
+        }
+    
     return model, history
 
 def detectOverfitting(history, lossFunction):
@@ -292,7 +310,7 @@ def detectOverfitting(history, lossFunction):
         lossFunction (str): The loss function used during training.
 
     Returns:
-        None
+        bool: True if overfitting is detected, False otherwise.
 
     Prints:
         - A warning message if overfitting is detected.
@@ -310,11 +328,16 @@ def detectOverfitting(history, lossFunction):
     accDiff = trainAcc[-1] - valAcc[-1]
     lossDiff = valLoss[-1] - trainLoss[-1]
 
+    overFit = False
     if (accDiff > 0.15) or (lossDiff > 0.15):
+        overFit = True
         print("Warning: The model is overfitting.")
     else:
         print("The model is not overfitting.")
+    
     print("----------------------------------")
+
+    return overFit
 
 
 def findInputImportance(model, features, numSamples=50, shapSampleSize=100, numRuns=5, plotSavePath=None):
@@ -644,7 +667,7 @@ def runGridSearch(features, target, paramGrid: dict):
     
     print(f"\n\nRunning grid search sequentially for {totalGrid} parameter combination{'s' if totalGrid > 1 else ''} on {deviceName}...")
     
-    bestAccuracy = 0.0
+    bestValAccuracy = 0.0
     bestParams = {}
     progressWheelIndex = 0
     totalElapsedTime = 0.0
@@ -674,17 +697,17 @@ def runGridSearch(features, target, paramGrid: dict):
                 l2_reg=params['l2_reg'],
                 verbose=0
             )
-            valAccuracy = history.get('bestValAccuracy', [0])
+            valAccuracy = history.get('val_Accuracy', [0])[-1]
         except Exception as e:
             print(f"-- Error in iteration {idx}: {e} --")
             valAccuracy = 0.0
         
         valAccuracyHistory.append(valAccuracy)
-        if valAccuracy > bestAccuracy:
-            bestAccuracy = valAccuracy
+        if valAccuracy > bestValAccuracy:
+            bestValAccuracy = valAccuracy
             bestParams = params.copy()
         
-        bestValAccuracyHistory.append(bestAccuracy)
+        bestValAccuracyHistory.append(bestValAccuracy)
         
         progressWheelIndex += 1
         
@@ -713,12 +736,12 @@ def runGridSearch(features, target, paramGrid: dict):
         
         completion = progressWheelIndex / totalGrid
         print(getProgressBar(completion, progressWheelIndex) +
-              f"Iteration Accuracy: {valAccuracy*100:.2f}% / Best Accuracy: {bestAccuracy * 100:.2f}%  |  Time remaining: {estTimeStr}  |  est. Finish Time: {estFinishTimeStr}   ", end='\r')
+              f"Iteration Accuracy: {valAccuracy*100:.2f}% / Best Accuracy: {bestValAccuracy * 100:.2f}%  |  Time remaining: {estTimeStr}  |  est. Finish Time: {estFinishTimeStr}   ", end='\r')
 
 
 
 
-    print(getProgressBar(1, progressWheelIndex) + f"Iteration Accuracy: {valAccuracy*100:.2f}% / Best Accuracy: {bestAccuracy * 100:.2f}%", end='\r')
+    print(getProgressBar(1, progressWheelIndex) + f"Iteration Accuracy: {valAccuracy*100:.2f}% / Best Accuracy: {bestValAccuracy * 100:.2f}%", end='\r')
     searchEndTime = pd.Timestamp.now()
     elapsedTime = searchEndTime - searchStartTime
     print(f"\n\nGrid search completed in {int(elapsedTime.components.hours):02}h "
@@ -728,7 +751,7 @@ def runGridSearch(features, target, paramGrid: dict):
     # add the random seed to the best parameters
     bestParams['randomSeed'] = RANDOM_SEED
 
-    print(f"\nBest Accuracy: {bestAccuracy * 100:.2f}%")
+    print(f"\nBest Accuracy: {bestValAccuracy * 100:.2f}%")
     print("Best Parameters:")
     paramstr = "\n".join([f"\t{k}: {v}" for k, v in bestParams.items()])
     print(paramstr)
