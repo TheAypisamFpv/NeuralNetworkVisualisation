@@ -814,20 +814,33 @@ def runModelTraining():
         FileNotFoundError: If the dataset file does not exist.
         Exception: If any step in the training pipeline fails.
     """
+    print("System Information:")
     print("Random seed set to:", RANDOM_SEED)
     print("NumPy version:", np.__version__)
-    print("PyTorch version", torch.__version__)
-    print()
+    print("PyTorch version:", torch.__version__)
+    print(" - Available GPUs:", torch.cuda.device_count())
+    print(" - CUDA available:", torch.cuda.is_available())
+    print(" - Current CUDA device id:", torch.cuda.current_device())
+    deviceProps = torch.cuda.get_device_properties(torch.cuda.current_device())
+    print(" - CUDA device name:", deviceProps.name)
     
-    # Check if PyTorch is using GPU
-    print("-" * 50)
-    print("Torch parameters:")
-    print("torch.cuda.is_available():", torch.cuda.is_available())
-    print("torch.cuda.current_device():", torch.cuda.current_device())
-    print("torch.cuda.get_device_name(0):", torch.cuda.get_device_name(0))
-    print("-" * 50)
+    # Calculate total CUDA cores based on SM count and cores per SM.
+    smCount = deviceProps.multi_processor_count
+    # For many NVIDIA GPUs (e.g., Turing architecture used in RTX 2060), each SM has 64 cores.
+    # You might need to adjust cores_per_sm based on your GPU architecture.
+    coresPerSm = 64 if ("RTX" in deviceProps.name or "Turing" in deviceProps.name) else 0
+    totalCudaCores = smCount * coresPerSm if coresPerSm else "Unknown"
+    print(" - CUDA cores count:", totalCudaCores)
 
-    print()
+    # Add tensor core count calculation and print
+    if isinstance(totalCudaCores, int):
+        # Assumption: for Turing architecture or similar, each SM has 8 Tensor Cores.
+        tensorCoreCount = smCount * 8
+    else:
+        tensorCoreCount = "Unknown"
+    print(" - Tensor Core count:", tensorCoreCount)
+    
+    print("-" * 50, "\n")
 
     tableToDrop = ['AverageHoursWorked']
 
