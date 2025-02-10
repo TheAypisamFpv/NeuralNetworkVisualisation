@@ -1,3 +1,4 @@
+print("Loading dependencies...", end="\r")
 from sklearn.cluster import AgglomerativeClustering
 from tkinter import Tk, filedialog
 import tensorflow as tf
@@ -12,6 +13,7 @@ import json
 import time
 import csv
 import os
+print("Loading dependencies done.")
 
 
 

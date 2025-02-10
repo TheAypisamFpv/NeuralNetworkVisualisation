@@ -861,10 +861,10 @@ def runModelTraining():
         'batchSize': [32, 20],
         'dropoutRate': [
             [0.2],
-            [0.5],
+            # [0.5],
         ], # better to use the same number as the number of hidden layers + input layer
-        'l2_reg': [0.015, 0.01],
-        'learningRate': [0.001, 0.0005],
+        'l2_reg': [ 0.01],
+        'learningRate': [0.001],
         "metrics": [
             # ['Accuracy', 'Recall', 'Precision'],
             # ['Accuracy', 'Precision'],
