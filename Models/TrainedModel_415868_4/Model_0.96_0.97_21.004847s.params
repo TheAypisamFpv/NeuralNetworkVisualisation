@@ -1,0 +1,1 @@
+{"batchSize": 32, "dropoutRate": [0.3], "epochs": 1500, "hiddenActivation": "relu", "inputActivation": "relu", "l2_reg": 0.001, "layers": [24, 1024, 512, 64, 1], "learningRate": 0.001, "loss": "binary_crossentropy", "metrics": ["Accuracy", "Recall"], "optimizer": "adam", "outputActivation": "sigmoid", "trainingTestingSplit": 0.2, "randomSeed": 606}

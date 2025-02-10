@@ -9,7 +9,7 @@ This tool allows you to visualize the inner workings of a neural network model. 
 ## Features
 
 - Load and visualize pre-trained neural network models.
-- Input data through a graphical interface.
+- Input data through a graphical interface (Copy paste supported).
 - Visualize neuron activations and connections.
 - Cluster neurons for better visualization performance.
 - Display feature importance (if feature importance file is available).

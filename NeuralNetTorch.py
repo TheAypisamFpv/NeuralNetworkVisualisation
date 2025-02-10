@@ -853,18 +853,19 @@ def runModelTraining():
     # Define hyperparameter grid for grid search
     hyperparameterGrid = {
         'layers': [
-            [features.shape[1], 512, 256, 128, 64, outputNeuronsNumber],
-            # [features.shape[1], 1024, 512, 64, outputNeuronsNumber],
+            # [features.shape[1], 512, 256, 128, 64, outputNeuronsNumber],
+            [features.shape[1], 2048, 1024, 512, 64, outputNeuronsNumber],
+            [features.shape[1], 1024, 512, 64, outputNeuronsNumber],
             
         ],
-        'epochs': [150],
-        'batchSize': [32, 20],
+        'epochs': [1500, 2000],
+        'batchSize': [32],
         'dropoutRate': [
-            [0.2],
+            [0.3],
             # [0.5],
         ], # better to use the same number as the number of hidden layers + input layer
-        'l2_reg': [ 0.01],
-        'learningRate': [0.001],
+        'l2_reg': [ 0.001],
+        'learningRate': [0.001, 0.01],
         "metrics": [
             # ['Accuracy', 'Recall', 'Precision'],
             # ['Accuracy', 'Precision'],
