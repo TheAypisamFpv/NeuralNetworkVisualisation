@@ -1,4 +1,5 @@
 print("Loading dependencies...", end="\r")
+from matplotlib.style import available
 from sklearn.cluster import AgglomerativeClustering
 from tkinter import Tk, filedialog
 import pandas as pd
@@ -98,6 +99,77 @@ class NeuralNetApp:
         self.enableClustering = True  # Variable to toggle clustering
 
 
+        # ask user to select what device to use (don't look too closely at the code, it works and used only once)
+        availableDevices = ["cpu"]
+        if torch.cuda.is_available():
+            availableDevices.append("cuda")
+        if len(availableDevices) > 1:
+            print("\nSelect the device to use:")
+            for i, device in enumerate(availableDevices):
+                print(f"{i + 1}: {device}")
+            selectedDevice = None
+            while selectedDevice is None:
+                try:
+                    selectedDevice = int(input("Enter the device number: "))
+                    if selectedDevice < 1 or selectedDevice > len(availableDevices):
+                        selectedDevice = None
+                        print("Invalid device number, please try again.")
+                except ValueError:
+                    print("Invalid input, please enter a number.")
+
+            if availableDevices[selectedDevice - 1] == "cuda":
+                availableGpus = torch.cuda.device_count()
+                if availableGpus > 1:
+                    print("\nSelect the GPU to use:")
+                    for i in range(availableGpus):
+                        print(f"{i + 1}: GPU {i} - {torch.cuda.get_device_name(i)}")
+                    selectedGpu = None
+                    while selectedGpu is None:
+                        try:
+                            selectedGpu = int(input("Enter the GPU number: "))
+                            if selectedGpu < 1 or selectedGpu > availableGpus:
+                                selectedGpu = None
+                                print("Invalid GPU number, please try again.")
+                        except ValueError:
+                            print("Invalid input, please enter a number.")
+                            
+                    self.device = torch.device(f"cuda:{selectedGpu - 1}")
+                else:
+                    self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
+
+        # print torch parameters        
+        print( "\n", "-" * 50)
+        print("System Information:")
+        print("PyTorch version:", torch.__version__)
+        if self.device.type == "cuda":
+            print(" - Current CUDA device id:", torch.cuda.current_device())
+            deviceProps = torch.cuda.get_device_properties(torch.cuda.current_device())
+            print(" - CUDA device name:", deviceProps.name)
+            
+            # Calculate total CUDA cores based on SM count and cores per SM.
+            smCount = deviceProps.multi_processor_count
+            # For many NVIDIA GPUs (e.g., Turing architecture used in RTX 2060), each SM has 64 cores.
+            # You might need to adjust cores_per_sm based on your GPU architecture.
+            coresPerSm = 64 if ("RTX" in deviceProps.name or "Turing" in deviceProps.name) else 0
+            totalCudaCores = smCount * coresPerSm if coresPerSm else "Unknown"
+            print(" - CUDA cores count:", totalCudaCores)
+
+            # Add tensor core count calculation and print
+            if isinstance(totalCudaCores, int):
+                # Assumption: for Turing architecture or similar, each SM has 8 Tensor Cores.
+                tensorCoreCount = smCount * 8
+            else:
+                tensorCoreCount = "Unknown"
+            print(" - Tensor Core count:", tensorCoreCount)
+        elif self.device.type == "cpu":
+            cpuName = torch.cuda.get_device_name(0)
+            print(" - CPU name:", cpuName)
+        
+        print("-" * 50, "\n")
+
+
         # Initialize Pygame
         pygame.init()
         pygame.display.set_caption("Neural Network Prediction")
@@ -160,39 +232,6 @@ class NeuralNetApp:
         # Connection width settings
         self.MIN_CONNECTION_WIDTH = 1
         self.MAX_CONNECTION_WIDTH = 10
-
-        # print torch parameters
-        self.device = torch.device("cpu")
-        
-        print( "\n", "-" * 50)
-        print("System Information:")
-        print("PyTorch version:", torch.__version__)
-        if self.device.type == "cuda":
-            print(" - Available GPUs:", torch.cuda.device_count())
-            print(" - CUDA available:", torch.cuda.is_available())
-            print(" - Current CUDA device id:", torch.cuda.current_device())
-            deviceProps = torch.cuda.get_device_properties(torch.cuda.current_device())
-            print(" - CUDA device name:", deviceProps.name)
-            
-            # Calculate total CUDA cores based on SM count and cores per SM.
-            smCount = deviceProps.multi_processor_count
-            # For many NVIDIA GPUs (e.g., Turing architecture used in RTX 2060), each SM has 64 cores.
-            # You might need to adjust cores_per_sm based on your GPU architecture.
-            coresPerSm = 64 if ("RTX" in deviceProps.name or "Turing" in deviceProps.name) else 0
-            totalCudaCores = smCount * coresPerSm if coresPerSm else "Unknown"
-            print(" - CUDA cores count:", totalCudaCores)
-
-            # Add tensor core count calculation and print
-            if isinstance(totalCudaCores, int):
-                # Assumption: for Turing architecture or similar, each SM has 8 Tensor Cores.
-                tensorCoreCount = smCount * 8
-            else:
-                tensorCoreCount = "Unknown"
-            print(" - Tensor Core count:", tensorCoreCount)
-        elif self.device.type == "cpu":
-            print(" - Using CPU for inference")
-        
-        print("-" * 50, "\n")
 
 
     def isFloat(self, value):

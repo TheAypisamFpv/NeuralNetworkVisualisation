@@ -49,13 +49,18 @@ If you want to use PyTorch with GPU support (recomended), check [PyTorch documen
 ## How to Use
 
 Open your desired Python file:
-- RunNeuralNetTensor.py for Tensor models.
-- *RunNeuralNetTorch.py for Torch models.* **(WORK IN PROGRESS)**
+- `VisualiseNeuralNetTensor.py` for Tensor models.
+- `VisualiseNeuralNetTorch.py` for Torch models.
 
+### Select Device:
+You will be asked to select what device you want to use.
+
+- If you have installed PyTorch with GPU support, the option to use the GPU will be available.
+- If you have multiple GPUs, you can select which one to use.
 
 ### Select a Model:
-- Click on the "Select Model" button to open a file dialog.
-- Choose the `.keras` (Tensor) or `.pt` (Torch) model file to load.
+- Click on the ***Select Model*** button to open a file dialog.
+- Choose the `.keras` *(Tensor)* or `.pt` *(Torch)* model file to load.
 
 
 ### Input Data:
