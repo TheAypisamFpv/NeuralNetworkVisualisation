@@ -22,7 +22,7 @@ Python can be downloaded from the official website: [python.org](https://www.pyt
 
 ### PyTorch
 
-If you want to use PyTorch with GPU support (recomended), check [PyTorch documentation](https://pytorch.org/get-started/locally/) for intrustions.
+If you want to use PyTorch with GPU support (recommended), check [PyTorch documentation](https://pytorch.org/get-started/locally/) for instructions.
 
 
 ## Installation
